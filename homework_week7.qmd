@@ -1,0 +1,141 @@
+---
+title: "homework_week7"
+format: html
+editor: visual
+---
+
+# Homework week 7
+
+This document explores the importance of data visualization using **Anscombe’s Quartet** and **Datasaurus Dozen** datasets. Specifically, summary statistics are analysed, the data is visualised and insights on the appropriateness of linear regression are drawn.
+
+## Set Up
+
+```{r set-up}
+rm(list=ls()) # remove all objects from the environment 
+
+# load required libraries
+library("tidyverse")  
+library("ggplot2")
+```
+
+## Problem 1
+
+### Load and explore data
+
+See *Anscombe, F. J. (1973). "Graphs in Statistical Analysis". American Statistician. 27 (1): 17–21. doi:10.1080/00031305.1973.10478966. JSTOR 2682899* for more information on the data.
+
+```{r load-data}
+anscombe_quartet <- readRDS("anscombe quartet.rds")
+```
+
+Use the str() function to obtain an overview of the datasets structure, particularly variable types and sample values.
+
+```{r check-structure}
+str(anscombe_quartet) # check structure
+```
+
+### Summary statistics
+
+```{r summary-statistics}
+anscombe_quartet %>% 
+  group_by(dataset) %>% 
+  summarise(
+    mean_x    = mean(x),
+    mean_y    = mean(y),
+    min_x     = min(x),
+    min_y     = min(y),
+    max_x     = max(x),
+    max_y     = max(y),
+    crrltn    = cor(x, y)
+  )
+```
+
+The summary statistics tell us that each data set has nearly identical summary statistics (eg mean of x, mean of y and correlation) yet the distributions are different. For instance, data set 4 has a notably higher minimum and maximum value for the variable x.
+
+### Data Visualisation
+
+```{r, data-visualisation}
+ ggplot(anscombe_quartet, aes(x=x,y=y)) +
+  geom_point() + 
+  geom_smooth(method = "lm",formula = "y ~ x") +
+  facet_wrap(~dataset) # visualise the relationship between x and y per dataset
+
+```
+
+**What do the plots tell us about the different datasets?**
+
+-   The plots tell us that the different datasets despite similar summary statistics show different patterns of data. That is, while the correlation between x and y is estimated to be nearly the same across the datasets, the data points are scattered very differently.
+
+**Describe the relationship between x and y in the different datasets.**
+
+-   Dataset 1: Strong positive correlation with datapoints scattered equally around the regression line
+
+-   Dataset 2: Non-linear relationship between x and y where lower levels of x appear to be associated with increasing values of y, and values of x above \~11 are associated with decreasing values of y.
+
+-   Dataset 3: Medium to strong positive correlation skewed in strength by an outlier.
+
+-   Dataset 4: It appears that there is not much of a relationship as all but one datapoint have the same x value.
+
+**Would linear regression be an appropriate statistical model to analyse the x-y relationship in each dataset?**
+
+-   Dataset 1: Yes
+
+-   Dataset 2: No, as the relationship between x and y appears to be non-linear.
+
+-   Dataset 3: Yes, but there is a potential outlier, the existence of which skews the estimation of the correlation between x and y to be stronger than it truly is.
+
+-   Dataset 4: No, as this data set only incorporates two distinct values for x.
+
+**What conclusions can you draw for the plots and summary statistics?**
+
+-   The plots reveal that despite similar summary statistics, the datasets show different relationships, emphasizing the importance of visualization. Visualisations can be particularly important when assessing the suitability of statistical methods to the data.
+
+### Save Plot
+
+```{r save-plot}
+ggsave("anscombe_quartet_plot.png", width = 5, height = 5) # save ggplot in png format
+```
+
+## Problem 2
+
+### Load data
+
+```{r load-data}
+datasaurus_dozen <- readRDS("datasaurus_dozen.rds") # load in data
+```
+
+### Summary statistics 
+
+```{r summary-statistics}
+datasaurus_summary <- datasaurus_dozen %>%
+  group_by(dataset) %>%
+  summarise(
+    mean_x = mean(x),
+    mean_y = mean(y),
+    min_x  = min(x),
+    min_y  = min(y),
+    max_x  = max(x),
+    max_y  = max(y),
+    correlation = cor(x, y)
+  )
+
+datasaurus_summary %>%
+  knitr::kable(caption = "Grouped Summary Statistics by Dataset") %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+```
+
+### Data Visualisation
+
+```{r data-visualisation}
+ggplot(datasaurus_dozen, aes(x = x, y = y)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE) +
+  facet_wrap(~dataset) +
+  labs(title = "Datasaurus Dozen", x = "X", y = "Y") # visualise the relationship between x and y per dataset
+```
+
+### Save Plot
+
+```{r save-plot}
+ggsave("datasaurus_plot.png", width = 5, height = 5) # save ggplot in png format
+```
