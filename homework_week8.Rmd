@@ -1,0 +1,284 @@
+---
+title: "Data Exploration"
+author: "Greta Dertwinkel"
+date: "05-03-25"
+abstract: "In this document, we analyze the Titanic dataset to understand the fate of its passengers."
+
+output:
+  html_document:
+    code_folding: show
+    toc: true
+---
+
+# Introduction
+
+Lindner & Erixson (2012, PNAS) provide data on 18 maritime disasters since 1855, including the Titanic. Their dataset includes over 15,000 cases and 17 variables (available for free at PNAS: <https://www.pnas.org/content/109/33/13220>). The Titanic is one of two disasters (the HMS Birkenhead is the other) in which female survival exceeded male survival. From the abstract: “Women have a distinct survival disadvantage compared with men. Captains and crew survive at a significantly higher rate than passengers. Taken together, our findings show that human behavior in life-and-death situations is best captured by the expression ‘every man for himself.’”
+
+Is that the case? Let's try to understand more about the fate of the passengers.
+
+## Methods:
+
+In the following document, we will explore the Titanic dataset. This dataset provides information on the passengers of the ocean liner ['Titanic'](https://en.wikipedia.org/wiki/Sinking_of_the_Titanic). We adapt content from [Regression Modelling Strategies by Frank Harrell](https://hbiostat.org/rmsc/intro). Along the way we will learn to use a few useful functions from the RMS and Hmisc packages, while applying some best practices in project management and reporting.
+
+## Descriptive Statistics
+
+We will begin with some descriptive statistics:
+
+```{r load-libraries, include=FALSE}
+# List of required packages
+packages <- c("ggplot2", "Hmisc", "rms", "tidyverse", "kableExtra", "units")
+
+# Install missing packages
+install_if_missing <- function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    install.packages(pkg, dependencies = TRUE)
+  }
+}
+
+# Apply function to all packages
+invisible(lapply(packages, install_if_missing))
+
+# load libraries
+library("ggplot2")
+library("Hmisc")
+library("rms") 
+library("tidyverse")
+library("kableExtra")
+library("units")
+```
+
+```{r setup, echo=FALSE}
+# Set global chunk options for consistency
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+# Print output in html format
+options(prType='html')  
+
+# Load in data and keep only the variables of interest
+titanic <- readRDS("titanic3.rds") %>%
+  select('pclass', 'survived', 'age', 'sex', 'sibsp', 'parch') %>%
+  mutate(age = as.numeric(age)) %>%  # Ensure 'age' is numeric
+  mutate(age = set_units(age, "years")) %>% #display age in years
+  mutate(age = as.numeric(age)) # Ensure 'age' is numeric
+```
+
+```{r data-summary}
+# Display a preview of the dataset
+kable(head(titanic), caption = "Preview of Titanic Dataset") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+# Check data strcuture
+str(titanic)
+
+# Compute summary statistics
+summary_stats <- summary(titanic)
+
+# Display summary statistics in a table
+kable(summary_stats, caption = "Summary Statistics of Titanic Dataset") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+```
+
+## Survival Rates
+
+Here we look at univariable summaries of survival rates.
+
+```{r survival-plot}
+# Create datadist object for use with 'rms' functions
+dd <- datadist(titanic)
+options(datadist = 'dd')
+
+# Compute summary statistics using the 'summary' function from 'rms'
+s <- summary(survived ~ age + sex + pclass +
+               cut2(sibsp, g = 4) + cut2(parch, g = 4), 
+             data = titanic)
+
+# Convert 'summary' output into a dataframe for better visualization
+s_df <- as.data.frame(s)
+
+# Increase margins before plotting
+par(mar = c(5, 10, 4, 2))  # Adjust bottom, left, top, right margins
+
+# Plot the survival rates
+plot(s, 
+     main = "Variable Distributions and Impact on Survival",
+     subtitles = FALSE, 
+     cex.main = 1.2,  # Adjust title size
+     cex.lab = 0.9,   # Reduce label size
+     cex.axis = 0.8,  # Reduce axis text size
+     las = 1)         # Rotate text for better readability
+```
+
+## Exploring Trends
+
+In this section, we will explore the dataset and try to identify trends in survival rates.
+
+We use nonparametric regression (loess) estimates of the relationship between age and survival probability.
+
+```{r survival-age}
+# Create a plot of survival rate across age
+yl <- ylab(NULL) # create object yl
+plot_age <- ggplot(titanic, aes(x=age, y=survived)) +
+  histSpikeg(survived ~ age, lowess=TRUE, data=titanic, histcol = "purple") +
+  ylim(0,1) + yl +
+  labs( x = "Age of Passengers", 
+        y = "Survival Probability",
+        title = "Survival Rate of Passengers across Age",
+        subtitle = "Survival Plot with LOESS Smoothed Line",
+        caption = "Data Source: Titanic Dataset") + # set labels for the plot
+  theme_minimal() +
+  theme(plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12, face = "italic"),
+        plot.caption = element_text(size = 10, face = "italic"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10),
+        panel.grid.major = element_line(color = "gray", linetype = "dotted"),
+        panel.grid.minor = element_line(color = "gray", linetype = "dotted")) #theme adjustments
+  
+
+# Plot
+print(plot_age)
+```
+
+What we observe is that survival rates decrease as a funciton of age.
+
+Let's look at whether this relationship differs by gender:
+
+```{r survival-gender}
+# Create a plot of survival rate across age
+plot_gender <- ggplot(titanic, aes(x=age, y=survived, color=sex)) +
+  histSpikeg(survived ~ age + sex, lowess=TRUE, data=titanic, histcol = "purple") +
+  ylim(0,1) + yl +
+  labs( x = "Age of Passengers", 
+        y = "Survival Probability",
+        title = "Survival Rate of Passengers across Age and Gender",
+        subtitle = "Survival Plot with LOESS Smoothed Line",
+        caption = "Data Source: Titanic Dataset",
+        size ="Gender") + # set labels for the plot 
+  theme_minimal() +
+  theme(plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12, face = "italic"),
+        plot.caption = element_text(size = 10, face = "italic"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10),
+        panel.grid.major = element_line(color = "gray", linetype = "dotted"),
+        panel.grid.minor = element_line(color = "gray", linetype = "dotted")) # theme adjustments
+  
+
+# Plot
+print(plot_gender)
+```
+
+And class:
+
+```{r survival-class}
+# Set the scale for the plot lines
+b  <- scale_size_discrete(range=c(.1, .85))
+
+# Create a plot of survival rate across age
+plot_class <- ggplot(titanic, aes(x=age, y=survived, size=pclass)) +
+  histSpikeg(survived ~ age + pclass, lowess=TRUE, data=titanic) + b +
+  ylim(0,1) + yl +
+  labs( x = "Age of Passengers", 
+        y = "Survival Probability",
+        title = "Survival Rate of Passengers across Age and Class",
+        subtitle = "Survival Plot with LOESS Smoothed Line",
+        caption = "Data Source: Titanic Dataset",
+        size = "Class") + # set labels for the plot 
+  theme_minimal() +
+  theme(plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12, face = "italic"),
+        plot.caption = element_text(size = 10, face = "italic"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10),
+        panel.grid.major = element_line(color = "gray", linetype = "dotted"),
+        panel.grid.minor = element_line(color = "gray", linetype = "dotted")) # theme adjustments
+
+# Plot
+print(plot_class)
+```
+
+Let's combine all this information:
+
+```{r combine-plots}
+# Create a plot of survival rate across age
+plot_comb <- ggplot(titanic, aes(x=age, y=survived, color = sex, size=pclass)) +
+  histSpikeg(survived ~ age + sex + pclass, lowess=TRUE, data=titanic) + b +
+  ylim(0,1) + yl +
+  labs( x = "Age of Passengers", 
+        y = "Survival Probability",
+        title = "Survival Rate of Passengers across Age, Class and Sexuality",
+        subtitle = "Survival Plot with LOESS Smoothed Line",
+        caption = "Data Source: Titanic Dataset",
+        size = "Class") + # set labels for the plot 
+  theme_minimal() +
+  theme(plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12, face = "italic"),
+        plot.caption = element_text(size = 10, face = "italic"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10),
+        panel.grid.major = element_line(color = "gray", linetype = "dotted"),
+        panel.grid.minor = element_line(color = "gray", linetype = "dotted")) + # theme adjustments
+  guides(color = guide_legend(title = "Gender"))
+
+# Plot
+print(plot_comb)
+
+# Combine all four plots
+gridExtra::grid.arrange(plot_age, plot_gender, plot_class, plot_comb, ncol=2)   # combine 4
+```
+
+Run a quick comparison:
+
+```{r quick-comparison}
+# Plot 1: Smooth curve of survival vs age (no grouping)
+p1 <- ggplot(titanic, aes(x = age, y = survived)) +
+      geom_smooth(method = "loess", color = "darkblue", size = 1) +  # Adjusted color and line thickness
+      ylim(0, 1) +
+      labs(title = "Survival vs Age (Overall)", y = "Survival Probability", x = "Age of Passengers") +
+      theme_minimal() +
+      theme(plot.title = element_text(size = 14, face = "bold", color = "#2C3E50"),
+            axis.title = element_text(size = 12),
+            axis.text = element_text(size = 10))
+
+# Plot 2: Survival vs Age by Sex
+p2 <- ggplot(titanic, aes(x = age, y = survived, color = sex)) +
+      geom_smooth(method = "loess", size = 1) +
+      ylim(0, 1) +
+      labs(title = "Survival vs Age by Sex", y = "Survival Probability", x = "Age of Passengers", color = "Sex") +
+      theme_minimal() +
+      theme(plot.title = element_text(size = 14, face = "bold", color = "#2C3E50"),
+            axis.title = element_text(size = 12),
+            axis.text = element_text(size = 10))
+
+# Plot 3: Survival vs Age by Passenger Class 
+p3 <- ggplot(titanic, aes(x = age, y = survived, size = as.factor(pclass))) +
+      geom_smooth(method = "loess", color = "darkgreen", size = 1) +
+      ylim(0, 1) +
+      labs(title = "Survival vs Age by Class", y = "Survival Probability", x = "Age of Passengers", size = "Passenger Class") +
+      theme_minimal() +
+      theme(plot.title = element_text(size = 14, face = "bold", color = "#2C3E50"),
+            axis.title = element_text(size = 12),
+            axis.text = element_text(size = 10))
+
+# Plot 4: Survival vs Age by Sex and Passenger Class
+p4 <- ggplot(titanic, aes(x = age, y = survived, color = sex, size = as.factor(pclass))) +
+      geom_smooth(method = "loess") + b +
+      ylim(0, 1) +
+      labs(title = "Survival vs Age by Sex and Class", y = "Survival Probability", x = "Age of Passengers", color = "Sex", size = "Passenger Class") +
+      theme_minimal() +
+      theme(plot.title = element_text(size = 14, face = "bold", color = "#2C3E50"),
+            axis.title = element_text(size = 12),
+            axis.text = element_text(size = 10))
+
+# Arrange the plots in a grid
+gridExtra::grid.arrange(p1, p2, p3, p4, ncol = 2)
+```
+
+The top-left panel shows unstratified estimates, while the other panels stratify by different variables.
+
+## Discussion
+
+Our findings confirm that passenger class, gender, and age had significant impacts on survival. Women had the highest survival rates, but the picture bicomes more nuanced when we stratify by other variables of interest.
+
+## Bibliography
+Elinder, M., & Erixson, O. (2012). Gender, social norms, and survival in maritime disasters. *Proceedings of the National Academy of Sciences*, *109*(33), 13220–13224. <https://doi.org/10.1073/pnas.1207156109>
